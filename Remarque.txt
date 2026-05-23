@@ -1,0 +1,6 @@
+Le transistor a une température critique de 150 degrés celsisus. 
+A cette température on lit sur le graphe une fréquence critique de 950 KHz
+
+Or à fréquence égale;
+
+Le mosfet à 950 KHz a une température de 42 degrés celsisus.
