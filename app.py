@@ -3,6 +3,7 @@ import numpy as np
 from losses import switching_losses
 from thermal import junction_temperature
 import matplotlib.pyplot as plt
+from thermal_dynamic import thermal_simulation
 
 
 # =========================================================
@@ -30,6 +31,10 @@ I = st.slider(
     1
 )
 
+fd = st.slider("Choisir une fréquence en Hz", 1000, 100000, 50000)
+
+simulation_time = st.slider("Temps de simulation en secondes", 0,7200,3600)
+
 
 # =========================================================
 # PARAMÈTRES TRANSISTOR (TIP122)
@@ -55,7 +60,9 @@ Ta = 25                     # Température ambiante
 Tc_transistor = 150         # Température critique
 Rth_transistor = 62.5
 Rth_mosfet = 62
-
+Cth_transistor = 10
+Cth_mosfet = 15
+dt = 0.1
 
 # =========================================================
 # TABLEAUX DE STOCKAGE
@@ -127,6 +134,18 @@ for f in frequencies:
         mosfet_temperature
     )
 
+    
+
+# Conversion listes -> arrays numpy
+transistor_temperatures = np.array(
+    transistor_temperatures
+)
+
+mosfet_temperatures = np.array(
+    mosfet_temperatures
+)
+
+
 
 # =========================================================
 # CHOIX DES COMPOSANTS
@@ -135,15 +154,19 @@ for f in frequencies:
 st.write("Choisir les composants à afficher")
 
 transistor_checkbox = st.checkbox(
-    "Transistor",
+    "Transistor(TIP122)",
     value=True
 )
 
 mosfet_checkbox = st.checkbox(
-    "Mosfet",
+    "Mosfet(IRLZ44N)",
     value=True
 )
 
+# =========================================================
+# SOUS TITRES 1
+# =========================================================
+st.header("ETUDE STATIQUE")
 
 # =========================================================
 # CHOIX DES GRAPHES
@@ -247,4 +270,81 @@ if show_temperatures:
 
     st.pyplot(fig)
 
+    critical_indices = np.where(
+    transistor_temperatures >= Tc_transistor
+)[0]
 
+if len(critical_indices) > 0:
+
+    position_fc = critical_indices[0]
+
+    fc = frequencies[position_fc]
+
+    Tm = mosfet_temperatures[position_fc]
+
+    st.write(f"Température critique du transistor: {Tc_transistor} °C")
+    st.write(f"Fréquence critique du transistor: {fc:} Hz")
+    st.write(f"Température du mosfet à la fréquence critique du transistor: {Tm:.1f} °C")
+
+else:
+    st.write("Le transistor n'atteint pas la température critique.")
+
+
+# =========================================================
+# SOUS TITRES 2
+# =========================================================
+st.header("ETUDE DYNAMIQUE")
+
+# =========================================================
+# DESCRIPTION
+# =========================================================
+st.write("Graphe montrant la température en fonction du temps se basant sur l'utilisation d'un modèle thermique")
+
+# =========================================================
+# CALCUL PERTES DYNAMIQUES
+# =========================================================
+mosfet_loss_d = switching_losses(V,I, mosfet_tr, mosfet_tf, fd)
+transistor_loss_d = switching_losses(V,I, transistor_tr, transistor_tf, fd)
+
+# =========================================================
+# GRAPHE SIMULATION DYNAMIQUE
+# =========================================================
+
+times, mosfet_tempd = thermal_simulation(mosfet_loss_d, Cth_mosfet, Ta, 0, dt, Rth_mosfet, simulation_time)
+times, transistor_tempd = thermal_simulation(transistor_loss_d, Cth_transistor, Ta, 0, dt, Rth_transistor, simulation_time)
+
+fig, ax = plt.subplots()
+
+ax.plot(times, mosfet_tempd, label = "Mosfet", color = "red")
+ax.plot(times, transistor_tempd, label = "Transistor", color = "blue")
+
+ax.axhline(
+        150,
+        linestyle="--",
+        color="green",
+        label="Température critique transistor"
+    )
+
+ax.set_xlabel("Temps(s)")
+ax.set_ylabel("Température")
+
+ax.legend()
+ax.grid(True)
+
+st.pyplot(fig)
+
+transistor_tempd = np.array(transistor_tempd)
+critical_indices_d = np.where(
+    transistor_tempd >= Tc_transistor
+)[0]
+
+if len(critical_indices_d) > 0:
+
+    position_tc = critical_indices_d[0]
+
+    tc = times[position_tc]
+
+    st.write(f"Le transistor atteint sa température critique en {tc:.1f} secondes")
+
+else:
+    st.write("Le transistor n'atteint pas la température critique.")
